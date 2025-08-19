@@ -2,12 +2,16 @@
 name = "fix-command"
 version = "0.0.1"
 edition = "2024"
-authors = ["Hai Pham Ngoc <ngochai285nd@gmail.com>"]
-description = "A tool to fix commands"
+description = "Fix previous console command by suggesting corrections (sudo, no_command, cd_correction, etc.). Binary: fix"
 license = "MIT"
-repository = "https://github.com/ngochai285nd/fix-command"
-keywords = ["fix", "command", "tool"]
-categories = ["development", "cli"]
+repository = "https://github.com/haiphamcoder/fix-command"
+readme = "README.md"
+categories = ["command-line-utilities"]
+keywords = ["cli", "shell", "command", "fix", "suggestions"]
+authors = ["Hai Pham Ngoc <ngochai285nd@gmail.com>"]
+
+[package.metadata]
+msrv = "1.70"
 
 [package.metadata.deb]
 maintainer = "Hai Pham Ngoc <ngochai285nd@gmail.com>"
@@ -18,33 +22,44 @@ assets = [
     ["target/release/fix", "usr/bin/fix"],
 ]
 
+[features]
+# Experimental instant mode: currently a stub that falls back to rerun
+instant-mode = []
+# Optional scripted rules via rhai (not implemented yet)
+rhai = ["dep:rhai"]
+
+[dependencies]
+anyhow = "1.0"
+thiserror = "2.0.15"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9.5"
+directories = "6.0.0"
+which = "8.0.0"
+regex = "1.10"
+shell-words = "1.1"
+crossterm = "0.29.0"
+sysinfo = { version = "0.37.0", features = ["multithread"] }
+wait-timeout = "0.2"
+strsim = "0.11.1"
+once_cell = "1.19"
+time = { version = "0.3", features = ["formatting"] }
+log = "0.4"
+env_logger = "0.11"
+cfg-if = "1.0"
+libc = { version = "0.2", optional = false }
+
+# Optional
+rhai = { version = "1.18", optional = true, features = ["serde"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[lib]
+name = "fix_command"
+path = "src/lib.rs"
+
 [[bin]]
 name = "fix"
 path = "src/main.rs"
-
-[dependencies]
-# Error handling across the application
-anyhow = "1.0.99"
-
-# CLI: parse command-line arguments
-clap = { version = "4.5.45", features = ["derive"] }
-
-# Terminal interaction (colors, input, screen control)
-crossterm = "0.29.0"
-
-# System & environment: user directories, system info, locate executables in PATH
-directories = "6.0.0"
-sysinfo = "0.37.0"
-which = "8.0.0"
-
-# Process handling & timeouts
-wait-timeout = "0.2.1"
-
-# String parsing & processing
-regex = "1.11.1"
-shell-words = "1.1.0"
-strsim = "0.11.1"
-
-# (De)serialize configuration data
-serde = { version = "1.0.219", features = ["derive"] }
-toml = "0.9.5"
