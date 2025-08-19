@@ -206,9 +206,9 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $exe = "target\$env:TARGET_TRIPLE\release\${{ env.PKG_NAME }}.exe"
-          if (!(Test-Path $exe)) { $exe = "target\release\${{ env.PKG_NAME }}.exe" }
-          $out = "dist\${{ env.PKG_NAME }}-${{ env.VERSION }}-windows-x86_64.exe"
+          $exe = "target\$env:TARGET_TRIPLE\release\${PKG_NAME}.exe"
+          if (!(Test-Path $exe)) { $exe = "target\release\${PKG_NAME}.exe" }
+          $out = "dist\${PKG_NAME}-${VERSION}-windows-x86_64.exe"
           Copy-Item $exe $out
           Get-ChildItem -Recurse dist
 

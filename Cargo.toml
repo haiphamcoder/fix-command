@@ -9,8 +9,42 @@ repository = "https://github.com/ngochai285nd/fix-command"
 keywords = ["fix", "command", "tool"]
 categories = ["development", "cli"]
 
+[package.metadata.deb]
+maintainer = "Hai Pham Ngoc <ngochai285nd@gmail.com>"
+license-file = ["LICENSE"]
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/fix", "usr/bin/fix"],
+]
+
 [[bin]]
 name = "fix"
 path = "src/main.rs"
 
 [dependencies]
+# Error handling across the application
+anyhow = "1.0.99"
+
+# CLI: parse command-line arguments
+clap = { version = "4.5.45", features = ["derive"] }
+
+# Terminal interaction (colors, input, screen control)
+crossterm = "0.29.0"
+
+# System & environment: user directories, system info, locate executables in PATH
+directories = "6.0.0"
+sysinfo = "0.37.0"
+which = "8.0.0"
+
+# Process handling & timeouts
+wait-timeout = "0.2.1"
+
+# String parsing & processing
+regex = "1.11.1"
+shell-words = "1.1.0"
+strsim = "0.11.1"
+
+# (De)serialize configuration data
+serde = { version = "1.0.219", features = ["derive"] }
+toml = "0.9.5"
