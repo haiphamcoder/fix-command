@@ -19,7 +19,7 @@ license-file = ["LICENSE"]
 section = "utils"
 priority = "optional"
 assets = [
-    ["target/release/fix", "usr/bin/fix"],
+    ["target/release/fix", "usr/bin/fix", "0755"]
 ]
 
 [features]
