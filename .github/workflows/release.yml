@@ -1,0 +1,245 @@
+name: Release (Rust multi-platform)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  BIN_NAME: ""
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  # ======================= LINUX (DEB) =======================
+  build-linux:
+    name: Build Linux .deb (${{ matrix.codename }})
+    needs: create-release
+    runs-on: ubuntu-latest
+    env:
+      HOME: /root
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - codename: ubuntu-20.04
+            image: ubuntu:20.04
+            target: x86_64-unknown-linux-gnu
+            arch: amd64
+          - codename: ubuntu-22.04
+            image: ubuntu:22.04
+            target: x86_64-unknown-linux-gnu
+            arch: amd64
+          - codename: ubuntu-24.04
+            image: ubuntu:24.04
+            target: x86_64-unknown-linux-gnu
+            arch: amd64
+          - codename: ubuntu-25.04
+            image: ubuntu:25.04
+            target: x86_64-unknown-linux-gnu
+            arch: amd64
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        shell: bash
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl build-essential pkg-config \
+             libssl-dev jq fakeroot git
+
+      - name: Install Rust (stable) via rustup
+        shell: bash
+        run: |
+          # Cài rustup vào $HOME (/root)
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
+          . "$HOME/.cargo/env"                             # load env cho current shell
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"        # add vào PATH cho các step sau
+          rustc -V && cargo -V
+          rustup target add ${{ matrix.target }}
+
+      - name: Detect package name & version
+        shell: bash
+        run: |
+          if [ -z "${BIN_NAME}" ]; then
+            PKG_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+          else
+            PKG_NAME="${BIN_NAME}"
+          fi
+          echo "PKG_NAME=$PKG_NAME" >> $GITHUB_ENV
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Install cargo-deb
+        shell: bash
+        run: |
+          . "$HOME/.cargo/env"
+          cargo install cargo-deb
+
+      - name: Build .deb
+        shell: bash
+        run: |
+          . "$HOME/.cargo/env"
+          cargo build --release --target ${{ matrix.target }}
+          cargo deb
+          mkdir -p dist
+          DEB_FILE=$(ls target/debian/*.deb | head -n 1)
+          OUT="dist/${PKG_NAME}-${VERSION}-linux-${{ matrix.arch }}-${{ matrix.codename }}.deb"
+          cp "$DEB_FILE" "$OUT"
+          ls -l dist
+
+      - name: Upload artifact (.deb)
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.codename }}
+          path: dist/*.deb
+
+  # ======================= MACOS (DMG) =======================
+  build-macos:
+    name: Build macOS .dmg
+    needs: create-release
+    runs-on: macos-latest
+    env:
+      TARGET_TRIPLE: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET_TRIPLE }}
+
+      - name: Cache build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Detect package name & version
+        shell: bash
+        run: |
+          if [ -z "${BIN_NAME}" ]; then
+            PKG_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+          else
+            PKG_NAME="${BIN_NAME}"
+          fi
+          echo "PKG_NAME=$PKG_NAME" >> $GITHUB_ENV
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Build binary
+        shell: bash
+        run: |
+          cargo build --release --target $TARGET_TRIPLE
+
+      - name: Package .dmg (unsigned)
+        shell: bash
+        run: |
+          mkdir -p dist/macos
+          BIN_PATH="target/$TARGET_TRIPLE/release/${PKG_NAME}"
+          cp "$BIN_PATH" "dist/macos/${PKG_NAME}"
+          chmod +x "dist/macos/${PKG_NAME}"
+          ARCH=$(uname -m) # arm64 trên macos-latest (Apple Silicon)
+          DMG="dist/${PKG_NAME}-${VERSION}-macos-${ARCH}.dmg"
+          hdiutil create -volname "${PKG_NAME}" -srcfolder "dist/macos" -ov -format UDZO "$DMG"
+          echo "DMG: $DMG"
+          ls -l dist
+
+      - name: Upload artifact (.dmg)
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: |
+            dist/*.dmg
+
+  # ======================= WINDOWS (EXE) =======================
+  build-windows:
+    name: Build Windows .exe
+    needs: create-release
+    runs-on: windows-latest
+    env:
+      TARGET_TRIPLE: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET_TRIPLE }}
+
+      - name: Cache build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Detect package name & version
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrEmpty($env:BIN_NAME)) {
+            $meta = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+            $pkgName = $meta.packages[0].name
+          } else {
+            $pkgName = $env:BIN_NAME
+          }
+          "PKG_NAME=$pkgName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $version = $env:GITHUB_REF_NAME -replace '^v',''
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build (release)
+        shell: pwsh
+        run: |
+          cargo build --release --target $env:TARGET_TRIPLE
+
+      - name: Collect .exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $exe = "target\$env:TARGET_TRIPLE\release\${{ env.PKG_NAME }}.exe"
+          if (!(Test-Path $exe)) { $exe = "target\release\${{ env.PKG_NAME }}.exe" }
+          $out = "dist\${{ env.PKG_NAME }}-${{ env.VERSION }}-windows-x86_64.exe"
+          Copy-Item $exe $out
+          Get-ChildItem -Recurse dist
+
+      - name: Upload artifact (.exe)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: |
+            dist\*.exe
+
+  # ======================= PUBLISH =======================
+  publish:
+    name: Publish assets to Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist-all
+
+      - name: Debug listing
+        run: ls -R ./dist-all
+
+      - name: Upload selected files to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            ./dist-all/**/**/*.deb
+            ./dist-all/**/**/*.dmg
+            ./dist-all/**/**/*.exe

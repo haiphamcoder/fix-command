@@ -1,0 +1,16 @@
+[package]
+name = "fix-command"
+version = "0.0.1"
+edition = "2024"
+authors = ["Hai Pham Ngoc <ngochai285nd@gmail.com>"]
+description = "A tool to fix commands"
+license = "MIT"
+repository = "https://github.com/ngochai285nd/fix-command"
+keywords = ["fix", "command", "tool"]
+categories = ["development", "cli"]
+
+[[bin]]
+name = "fix"
+path = "src/main.rs"
+
+[dependencies]
